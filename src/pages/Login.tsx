@@ -1,5 +1,5 @@
-import React, { FormEvent, useRef, useState } from 'react';
-import { Navigate, redirect } from 'react-router-dom';
+import React, { FormEvent, useEffect, useRef, useState } from 'react';
+import { redirect, useNavigate } from 'react-router-dom';
 import { Container } from 'react-bootstrap';
 import Button from 'react-bootstrap/button';
 import Form from 'react-bootstrap/form';
@@ -9,6 +9,7 @@ import { authSelector, setUser } from '../redux/slices/authSlice';
 import CustomSpinner from '../components/CustomSpinner';
 
 function Login() {
+  const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const dispatch = useAppDispatch();
   const { isAuth } = useAppSelector(authSelector);
@@ -30,9 +31,9 @@ function Login() {
     }
   };
 
-  if (isAuth) {
-    return <Navigate to="/" />;
-  }
+  useEffect(() => {
+    if (sessionStorage.getItem('id')) navigate('/');
+  }, [navigate, isAuth]);
 
   return (
     <Container fluid="sm">

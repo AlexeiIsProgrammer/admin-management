@@ -1,5 +1,5 @@
-import { FormEvent, useRef, useState } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { FormEvent, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Container from 'react-bootstrap/Container';
 import Button from 'react-bootstrap/button';
 import Form from 'react-bootstrap/form';
@@ -34,9 +34,9 @@ function Registration() {
     }
   };
 
-  if (isAuth) {
-    return <Navigate to="/" />;
-  }
+  useEffect(() => {
+    if (sessionStorage.getItem('id')) navigate('/');
+  }, [navigate, isAuth]);
 
   return (
     <Container>

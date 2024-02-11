@@ -191,24 +191,44 @@ const registerWithEmailAndPassword = async (
   return undefined;
 };
 
-const checkIfUserRemovedOrBlocked = async (
+const checkIfUserRemovedOrBlockedYourself = async (
   users: UserType[],
-  action
+  action: string
 ): Promise<undefined | boolean> => {
   const userId = sessionStorage.getItem('id');
   const currentUser = users.find(({ id }) => userId === id);
+
   try {
     if (currentUser) {
       await findUserByEmail(currentUser.email);
-
-      if (action === 'get') return undefined;
 
       sessionStorage.removeItem('id');
       alert(`You've ${action} yourself!`);
       return true;
     }
   } catch {
-    alert(`You've been blocked or deleted!`);
+    alert("You've been blocked or deleted!");
+    return true;
+  }
+
+  return undefined;
+};
+
+const checkIfUserRemovedOrBlocked = async (
+  users: UserType[]
+): Promise<undefined | boolean> => {
+  const userId = sessionStorage.getItem('id');
+  const currentUser = users.find(({ id }) => userId === id);
+
+  try {
+    if (currentUser) {
+      await findUserByEmail(currentUser.email);
+    } else {
+      alert("You've been deleted!");
+      return true;
+    }
+  } catch {
+    alert("You've been blocked!");
     return true;
   }
 
@@ -224,7 +244,7 @@ const getUsers = async (): Promise<UserType[] | undefined | boolean> => {
     registeredDate: toIsoString(docItem.data().registeredDate),
   })) as UserType[];
 
-  if (await checkIfUserRemovedOrBlocked(users, 'get')) {
+  if (await checkIfUserRemovedOrBlocked(users)) {
     return true;
   }
 
@@ -251,7 +271,7 @@ const removeUsersFromDB = async (
       )
     );
 
-    return await checkIfUserRemovedOrBlocked(users, 'removed');
+    return await checkIfUserRemovedOrBlockedYourself(users, 'removed');
   } catch (err) {
     if (err instanceof Error) {
       alert(`Error removing user: ${err.message}`);
@@ -285,7 +305,7 @@ const updateUsersStatus = async (
     await Promise.all(userPromises);
 
     return status === 'blocked'
-      ? await checkIfUserRemovedOrBlocked(users, 'blocked')
+      ? await checkIfUserRemovedOrBlockedYourself(users, 'blocked')
       : undefined;
   } catch (err) {
     if (err instanceof Error) {
