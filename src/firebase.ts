@@ -13,6 +13,7 @@ import {
   updateDoc,
   where,
 } from 'firebase/firestore';
+import toIsoString from './utils/toIsoString';
 
 export type UserType = {
   id: string;
@@ -50,8 +51,8 @@ const getLastUser = async (): Promise<undefined | Error | UserType> => {
     if (err instanceof Error) {
       throw new Error("Didn't find the last user");
     }
-    return undefined;
   }
+  return undefined;
 };
 
 const findUserByEmail = async (
@@ -66,10 +67,19 @@ const findUserByEmail = async (
       ...docItem.data(),
       id: docItem.id,
     })) as UserType[];
-    return users[0];
+
+    const user = users[0];
+
+    if (!user) return user;
+
+    if (users[0].status === 'blocked') {
+      throw new Error(`You've been blocked!`);
+    }
+
+    return user;
   } catch (err) {
     if (err instanceof Error) {
-      throw new Error(`Error: ${err.message}`);
+      throw new Error(err.message);
     }
     return undefined;
   }
@@ -129,7 +139,7 @@ const logInWithEmailAndPassword = async (
     return getUserByEmail;
   } catch (err) {
     if (err instanceof Error) {
-      alert('Bad login... Try again.');
+      alert(err.message);
     }
     return undefined;
   }
@@ -161,8 +171,7 @@ const registerWithEmailAndPassword = async (
       }
     }
 
-    const user: UserType = {
-      id: '1',
+    const user: Omit<UserType, 'id'> = {
       name,
       lastLoginDate,
       registeredDate,
@@ -171,9 +180,9 @@ const registerWithEmailAndPassword = async (
       status: 'active',
     };
 
-    await addDoc(collection(db, 'users'), user);
+    const userResponse = await addDoc(collection(db, 'users'), user);
 
-    return user;
+    return { ...user, id: userResponse.id };
   } catch (err) {
     if (err instanceof Error) {
       alert(err.message);
@@ -182,17 +191,49 @@ const registerWithEmailAndPassword = async (
   return undefined;
 };
 
-const getUsers = async (): Promise<UserType[] | undefined> => {
+const checkIfUserRemovedOrBlocked = async (
+  users: UserType[],
+  action
+): Promise<undefined | boolean> => {
+  const userId = sessionStorage.getItem('id');
+  const currentUser = users.find(({ id }) => userId === id);
+  try {
+    if (currentUser) {
+      await findUserByEmail(currentUser.email);
+
+      if (action === 'get') return undefined;
+
+      sessionStorage.removeItem('id');
+      alert(`You've ${action} yourself!`);
+      return true;
+    }
+  } catch {
+    alert(`You've been blocked or deleted!`);
+    return true;
+  }
+
+  return undefined;
+};
+
+const getUsers = async (): Promise<UserType[] | undefined | boolean> => {
   const querySnapshot = await getDocs(collection(db, 'users'));
   const users = querySnapshot.docs.map((docItem) => ({
     ...docItem.data(),
     id: docItem.id,
+    lastLoginDate: toIsoString(docItem.data().lastLoginDate),
+    registeredDate: toIsoString(docItem.data().registeredDate),
   })) as UserType[];
+
+  if (await checkIfUserRemovedOrBlocked(users, 'get')) {
+    return true;
+  }
 
   return users;
 };
 
-const removeUsersFromDB = async (users: UserType[]) => {
+const removeUsersFromDB = async (
+  users: UserType[]
+): Promise<boolean | undefined> => {
   try {
     await Promise.all(
       users.map(
@@ -209,11 +250,49 @@ const removeUsersFromDB = async (users: UserType[]) => {
           })
       )
     );
+
+    return await checkIfUserRemovedOrBlocked(users, 'removed');
   } catch (err) {
     if (err instanceof Error) {
       alert(`Error removing user: ${err.message}`);
     }
   }
+  return undefined;
+};
+
+const updateUsersStatus = async (
+  users: UserType[],
+  status: 'active' | 'blocked'
+): Promise<boolean | undefined> => {
+  try {
+    const userPromises = users
+      .filter((user) => user.status !== status)
+      .map(
+        (user) =>
+          new Promise((resolve, reject) => {
+            const userDocRef = doc(db, 'users', user.id);
+            updateDoc(userDocRef, {
+              status,
+            })
+              .then((res) => {
+                resolve(res);
+              })
+              .catch((err) => {
+                reject(err);
+              });
+          })
+      );
+    await Promise.all(userPromises);
+
+    return status === 'blocked'
+      ? await checkIfUserRemovedOrBlocked(users, 'blocked')
+      : undefined;
+  } catch (err) {
+    if (err instanceof Error) {
+      throw new Error(err.message);
+    }
+  }
+  return undefined;
 };
 
 export {
@@ -221,5 +300,6 @@ export {
   logInWithEmailAndPassword,
   getUsers,
   removeUsersFromDB,
+  updateUsersStatus,
   findUserByEmail,
 };

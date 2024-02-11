@@ -24,7 +24,7 @@ const authSlice = createSlice({
     setUser: (state, action: PayloadAction<UserType>) => {
       state.isAuth = true;
       state.user = action.payload;
-      sessionStorage.setItem('id', action.payload.id.toString());
+      sessionStorage.setItem('id', action.payload.id);
     },
   },
 });
